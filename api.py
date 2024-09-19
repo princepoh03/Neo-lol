@@ -115,7 +115,7 @@ def delta(url):
         }
 
 # Fluxus configuration
-key_regex = r'let content = "([^"]+)";'
+key_regex = r'var key\s*=\s*"([^"]+)"'
 
 def fetch(url, headers):
     try:
@@ -128,8 +128,7 @@ def fetch(url, headers):
         raise
 
 def extract_hash_from_response(response_text):
-    # Implement the logic to extract the hash from the response
-    # Adjust regex as per actual response structure
+    # Regex to extract hash based on typical response patterns
     match = re.search(r'"hash":"([^"]+)"', response_text)
     if match:
         return match.group(1)
@@ -158,7 +157,8 @@ def bypass_link(url):
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x66) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
         }
 
-        response_text = fetch(endpoints[0], headers)  # Fetch first endpoint
+        # Fetch the first endpoint to extract hash
+        response_text = fetch(endpoints[0], headers)
         hash_value = extract_hash_from_response(response_text)
 
         # Replace hash in the subsequent endpoints

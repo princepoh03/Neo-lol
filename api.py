@@ -115,15 +115,26 @@ def delta(url):
         }
 
 # Fluxus configuration
-key_regex = r'let content = "([^"]+)";'
+key_regex = r'let content = "([^"]+)";'
 
 def fetch(url, headers):
     try:
         response = requests.get(url, headers=headers)
         response.raise_for_status()
+        print(f"Fetched URL: {url} - Status Code: {response.status_code}")
         return response.text
     except requests.exceptions.RequestException as e:
-        raise Exception(f"Failed to fetch URL: {url}. Error: {e}")
+        print(f"Failed to fetch URL: {url}. Error: {e}")
+        raise
+
+def extract_hash_from_response(response_text):
+    # Implement the logic to extract the hash from the response
+    # Adjust regex as per actual response structure
+    match = re.search(r'"hash":"([^"]+)"', response_text)
+    if match:
+        return match.group(1)
+    else:
+        raise Exception("Failed to extract hash from response")
 
 def bypass_link(url):
     try:
@@ -134,8 +145,8 @@ def bypass_link(url):
         start_time = time.time()
         endpoints = [
             f"https://flux.li/android/external/start.php?HWID={hwid}",
-            "https://flux.li/android/external/check1.php?hash={hash}",  # Replace 'hash' dynamically
-            "https://flux.li/android/external/main.php?hash={hash}"  # Replace 'hash' dynamically
+            "https://flux.li/android/external/check1.php?hash={hash}",
+            "https://flux.li/android/external/main.php?hash={hash}"
         ]
 
         headers = {
@@ -147,18 +158,27 @@ def bypass_link(url):
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x66) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
         }
 
-        for endpoint in endpoints:
+        response_text = fetch(endpoints[0], headers)  # Fetch first endpoint
+        hash_value = extract_hash_from_response(response_text)
+
+        # Replace hash in the subsequent endpoints
+        for i in range(1, len(endpoints)):
+            endpoint = endpoints[i].format(hash=hash_value)
             response_text = fetch(endpoint, headers)
-            if endpoint == endpoints[-1]:  # On last endpoint
-                match = re.search(key_regex, response_text)
-                if match:
-                    end_time = time.time()
-                    time_taken = end_time - start_time
-                    return match.group(1), time_taken
-                else:
-                    raise Exception("Failed to find content key")
+            print(f"Endpoint: {endpoint} - Response: {response_text[:200]}")  # Log part of the response
+
+        # Check the last endpoint for the key
+        match = re.search(key_regex, response_text)
+        if match:
+            end_time = time.time()
+            time_taken = end_time - start_time
+            return match.group(1), time_taken
+        else:
+            raise Exception("Failed to find content key")
+
     except Exception as e:
-        raise Exception(f"Failed to bypass link. Error: {e}")
+        print(f"Failed to bypass link. Error: {e}")
+        raise
 
 @app.route('/api/bypass', methods=['GET'])
 def bypass():

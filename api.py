@@ -1,11 +1,9 @@
 import time
 import requests
-import json
-import os
-from urllib.parse import urlparse, parse_qs
 import base64
-from flask import Flask, request, jsonify
 import re
+from urllib.parse import urlparse, parse_qs
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
@@ -115,25 +113,15 @@ def delta(url):
         }
 
 # Fluxus configuration
-key_regex = r'var key\s*=\s*"([^"]+)"'
+key_regex = r'let content = \("([^"]+)"\);'
 
 def fetch(url, headers):
     try:
         response = requests.get(url, headers=headers)
         response.raise_for_status()
-        print(f"Fetched URL: {url} - Status Code: {response.status_code}")
         return response.text
     except requests.exceptions.RequestException as e:
-        print(f"Failed to fetch URL: {url}. Error: {e}")
-        raise
-
-def extract_hash_from_response(response_text):
-    # Regex to extract hash based on typical response patterns
-    match = re.search(r'"hash":"([^"]+)"', response_text)
-    if match:
-        return match.group(1)
-    else:
-        raise Exception("Failed to extract hash from response")
+        raise Exception(f"Failed to fetch URL: {url}. Error: {e}")
 
 def bypass_link(url):
     try:
@@ -143,49 +131,50 @@ def bypass_link(url):
 
         start_time = time.time()
         endpoints = [
-            f"https://flux.li/android/external/start.php?HWID={hwid}",
-            "https://flux.li/android/external/check1.php?hash={hash}",
-            "https://flux.li/android/external/main.php?hash={hash}"
+            {
+                "url": f"https://flux.li/android/external/start.php?HWID={hwid}",
+                "referer": ""
+            },
+            {
+                "url": "https://flux.li/android/external/check1.php?hash={hash}",
+                "referer": "https://linkvertise.com"
+            },
+            {
+                "url": "https://flux.li/android/external/main.php?hash={hash}",
+                "referer": "https://linkvertise.com"
+            }
         ]
 
-        headers = {
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'DNT': '1',
-            'Connection': 'close',
-            'Referer': 'https://linkvertise.com',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x66) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
-        }
-
-        # Fetch the first endpoint to extract hash
-        response_text = fetch(endpoints[0], headers)
-        hash_value = extract_hash_from_response(response_text)
-
-        # Replace hash in the subsequent endpoints
-        for i in range(1, len(endpoints)):
-            endpoint = endpoints[i].format(hash=hash_value)
-            response_text = fetch(endpoint, headers)
-            print(f"Endpoint: {endpoint} - Response: {response_text[:200]}")  # Log part of the response
-
-        # Check the last endpoint for the key
-        match = re.search(key_regex, response_text)
-        if match:
-            end_time = time.time()
-            time_taken = end_time - start_time
-            return match.group(1), time_taken
-        else:
-            raise Exception("Failed to find content key")
-
+        for endpoint in endpoints:
+            url = endpoint["url"]
+            referer = endpoint["referer"]
+            headers = {
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'DNT': '1',
+                'Connection': 'close',
+                'Referer': referer,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x66) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
+            }
+            response_text = fetch(url, headers)
+            if endpoint == endpoints[-1]:
+                match = re.search(key_regex, response_text)
+                if match:
+                    end_time = time.time()
+                    time_taken = end_time - start_time
+                    return match.group(1), time_taken
+                else:
+                    raise Exception("Failed to find content key")
     except Exception as e:
-        print(f"Failed to bypass link. Error: {e}")
-        raise
+        raise Exception(f"Failed to bypass link. Error: {e}")
 
-@app.route('/api/bypass', methods=['GET'])
+@app.route("/")
+def home():
+    return jsonify({"message": "Invalid Endpoint"})
+
+@app.route("/api/bypass")
 def bypass():
     url = request.args.get("url")
-    if not url:
-        return jsonify({"error": "Missing 'url' parameter"}), 400
-
     if url.startswith("https://flux.li/android/external/start.php?HWID="):
         try:
             content, time_taken = bypass_link(url)

@@ -6,9 +6,8 @@ from urllib.parse import urlparse, parse_qs
 import base64
 from flask import Flask, request, jsonify
 
-i = 0
 platoboost = "https://gateway.platoboost.com/a/8?id="
-discord_webhook_url = "https://discord.com/api/webhooks/1286007233653641246/vjUsAvEcuyxAzJyGh3VZU2txZfa9FO5H1Ohdb1i2WHYlrrrFv-JMfdbveH8xVsBTiAPI" # enter your webhook if security check detected
+discord_webhook_url = "https://discord.com/api/webhooks/1286007233653641246/vjUsAvEcuyxAzJyGh3VZU2txZfa9FO5H1Ohdb1i2WHYlrrrFv-JMfdbveH8xVsBTiAPI"  # enter your webhook if security check detected
 
 app = Flask(__name__)
 
@@ -108,7 +107,6 @@ def delta(url):
             return {
                 "status": "success",
                 "key": pass_info['key'],
-                
                 "time taken": f"{execution_time:.2f} seconds"
             }
 
@@ -117,7 +115,7 @@ def delta(url):
         execution_time = time.time() - start_time
         return {
             "status": "error",
-            "error": "please solve the hcaptcha nigga",
+            "error": "An issue occurred, please check the logs.",
             "time taken": f"{execution_time:.2f} seconds"
         }
 
@@ -129,5 +127,11 @@ def deltax():
 
     result = delta(url)
     return jsonify(result)
+
+@app.route('/', methods=['GET'])
+def index():
+    return jsonify({"message": "Welcome to the API"})
+
+
 if __name__ == "__main__":
     app.run()

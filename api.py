@@ -133,33 +133,23 @@ def bypass_link(url):
 
         start_time = time.time()
         endpoints = [
-            {
-                "url": f"https://flux.li/android/external/start.php?HWID={hwid}",
-                "referer": ""
-            },
-            {
-                "url": "https://flux.li/android/external/check1.php?hash={hash}",
-                "referer": "https://linkvertise.com"
-            },
-            {
-                "url": "https://flux.li/android/external/main.php?hash={hash}",
-                "referer": "https://linkvertise.com"
-            }
+            f"https://flux.li/android/external/start.php?HWID={hwid}",
+            "https://flux.li/android/external/check1.php?hash={hash}",  # Replace 'hash' dynamically
+            "https://flux.li/android/external/main.php?hash={hash}"  # Replace 'hash' dynamically
         ]
 
+        headers = {
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'DNT': '1',
+            'Connection': 'close',
+            'Referer': 'https://linkvertise.com',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x66) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
+        }
+
         for endpoint in endpoints:
-            url = endpoint["url"]
-            referer = endpoint["referer"]
-            headers = {
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'DNT': '1',
-                'Connection': 'close',
-                'Referer': referer,
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x66) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
-            }
-            response_text = fetch(url, headers)
-            if endpoint == endpoints[-1]:
+            response_text = fetch(endpoint, headers)
+            if endpoint == endpoints[-1]:  # On last endpoint
                 match = re.search(key_regex, response_text)
                 if match:
                     end_time = time.time()

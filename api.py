@@ -4,6 +4,9 @@ import base64
 import re
 from urllib.parse import urlparse, parse_qs
 from flask import Flask, request, jsonify
+import asyncio
+import aiohttp
+from aiohttp import ClientSession
 
 app = Flask(__name__)
 
@@ -113,60 +116,76 @@ def delta(url):
         }
 
 # Fluxus configuration
-key_regex = r'let content = \("([^"]+)"\);'
+key_regex_1 = r'let content = "([^"]+)";'
+key_regex_2 = r'class="card-key" id="key" value="([^"]+)"'
 
-def fetch(url, headers):
-    try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        return response.text
-    except requests.exceptions.RequestException as e:
-        raise Exception(f"Failed to fetch URL: {url}. Error: {e}")
+async def fetch(session, url, referer):
+    headers = {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'DNT': '1',
+        'Connection': 'close',
+        'Referer': referer,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x66) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
+    }
+    async with session.get(url, headers=headers) as response:
+        content = await response.text()
+        if response.status != 200:
+            return None, response.status, content
+        return content, response.status, None
 
-def bypass_link(url):
-    try:
-        hwid = url.split("HWID=")[-1]
-        if not hwid:
-            raise Exception("Invalid HWID in URL")
+async def process_link():
+    endpoints = [
+        {
+            "url": "https://getkey.relzscript.xyz/redirect.php?hwid=12627128828282272",
+            "referer": "https://loot-links.com"
+        },
+        {
+            "url": "https://getkey.relzscript.xyz/check1.php",
+            "referer": "https://linkvertise.com"
+        },
+        {
+            "url": "https://getkey.relzscript.xyz/check2.php",
+            "referer": "https://linkvertise.com"
+        },
+        {
+            "url": "https://getkey.relzscript.xyz/check3.php",
+            "referer": "https://linkvertise.com"
+        },
+        {
+            "url": "https://getkey.relzscript.xyz/finished.php",
+            "referer": "https://linkvertise.com"
+        }
+    ]
 
-        start_time = time.time()
-        endpoints = [
-            {
-                "url": f"https://flux.li/android/external/start.php?HWID={hwid}",
-                "referer": ""
-            },
-            {
-                "url": "https://flux.li/android/external/check1.php?hash={hash}",
-                "referer": "https://linkvertise.com"
-            },
-            {
-                "url": "https://flux.li/android/external/main.php?hash={hash}",
-                "referer": "https://linkvertise.com"
-            }
-        ]
-
-        for endpoint in endpoints:
+    async with ClientSession() as session:
+        for i, endpoint in enumerate(endpoints):
             url = endpoint["url"]
             referer = endpoint["referer"]
-            headers = {
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'DNT': '1',
-                'Connection': 'close',
-                'Referer': referer,
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x66) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
-            }
-            response_text = fetch(url, headers)
-            if endpoint == endpoints[-1]:
-                match = re.search(key_regex, response_text)
+            content, status, error_content = await fetch(session, url, referer)
+            if error_content:
+                return {
+                    "status": "error",
+                    "message": f"Failed to bypass at step {i} | Status code: {status}",
+                    "content": error_content
+                }
+
+            if i == len(endpoints) - 1:
+                match = re.search(key_regex_1, content)
+                if not match:
+                    match = re.search(key_regex_2, content)
+
                 if match:
-                    end_time = time.time()
-                    time_taken = end_time - start_time
-                    return match.group(1), time_taken
+                    return {
+                        "status": "success",
+                        "key": match.group(1)
+                    }
                 else:
-                    raise Exception("Failed to find content key")
-    except Exception as e:
-        raise Exception(f"Failed to bypass link. Error: {e}")
+                    return {
+                        "status": "error",
+                        "message": "Bypass not successful! No key found.",
+                        "content": content
+                    }
 
 @app.route("/")
 def home():
@@ -177,8 +196,11 @@ def bypass():
     url = request.args.get("url")
     if url.startswith("https://flux.li/android/external/start.php?HWID="):
         try:
-            content, time_taken = bypass_link(url)
-            return jsonify({"key": content, "time_taken": time_taken, "credit": "FeliciaXxx"})
+            start_time = time.time()
+            result = asyncio.run(process_link())
+            end_time = time.time()
+            result['execution_time'] = end_time - start_time
+            return jsonify(result)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
     else:

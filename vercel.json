@@ -9,11 +9,11 @@
   "routes": [
     {
       "src": "/api/bypass",
-      "dest": "/api.py"
+      "dest": "api.py"
     },
     {
-      "src": "/",
-      "dest": "/api.py"
+      "src": "/(.*)",
+      "dest": "api.py"
     }
   ]
 }

@@ -8,8 +8,7 @@ from flask import Flask, request, jsonify
 app = Flask(__name__)
 
 # Fluxus configuration
-key_regex = r'let content = "([^"]+)";'
-API_KEY = "sosa4r8x"  # Define your API key here
+key_regex = r'let content = \("([^"]+)"\);'
 
 def fetch(url, headers):
     try:
@@ -70,10 +69,6 @@ def home():
 
 @app.route("/api/bypass")
 def bypass():
-    api_key = request.args.get("ApiKey")
-    if api_key != API_KEY:
-        return jsonify({"error": "Invalid API Key"}), 401
-
     url = request.args.get("url")
     if url.startswith("https://flux.li/android/external/start.php?HWID="):
         try:

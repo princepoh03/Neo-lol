@@ -2,6 +2,7 @@ import asyncio
 import time
 import re
 import requests
+import base64
 from urllib.parse import urlparse, parse_qs
 from flask import Flask, request, jsonify
 from aiohttp import ClientSession
@@ -13,8 +14,8 @@ platoboost = "https://gateway.platoboost.com/a/8?id="
 discord_webhook_url = "https://discord.com/api/webhooks/1286007233653641246/vjUsAvEcuyxAzJyGh3VZU2txZfa9FO5H1Ohdb1i2WHYlrrrFv-JMfdbveH8xVsBTiAPI"
 
 # Regular expression to extract key from the content
-key_regex_1 = r'let content = "([^"]+)";'  # Original regex
-key_regex_2 = r'class="card-key" id="key" value="([^"]+)"'  # New regex for the updated pattern
+key_regex_1 = r'let content = "([^"]+)"'  # Fixed the invalid characters
+key_regex_2 = r'class="card-key" id="key" value="([^"]+)"'
 
 # Headers for the HTTP requests
 headers = {
@@ -127,62 +128,6 @@ def delta(url):
             "time taken": f"{execution_time:.2f} seconds"
         }
 
-# Fluxus configuration
-key_regex = r'let content = "([^"]+)";'
-
-def fetch(url, headers):
-    try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        return response.text
-    except requests.exceptions.RequestException as e:
-        raise Exception(f"Failed to fetch URL: {url}. Error: {e}")
-
-def bypass_link(url):
-    try:
-        hwid = url.split("HWID=")[-1]
-        if not hwid:
-            raise Exception("Invalid HWID in URL")
-
-        start_time = time.time()
-        endpoints = [
-            {
-                "url": f"https://flux.li/android/external/start.php?HWID={hwid}",
-                "referer": ""
-            },
-            {
-                "url": "https://flux.li/android/external/check1.php?hash={hash}",
-                "referer": "https://linkvertise.com"
-            },
-            {
-                "url": "https://flux.li/android/external/main.php?hash={hash}",
-                "referer": "https://linkvertise.com"
-            }
-        ]
-
-        for endpoint in endpoints:
-            url = endpoint["url"]
-            referer = endpoint["referer"]
-            headers = {
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'DNT': '1',
-                'Connection': 'close',
-                'Referer': referer,
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x66) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
-            }
-            response_text = fetch(url, headers)
-            if endpoint == endpoints[-1]:
-                match = re.search(key_regex, response_text)
-                if match:
-                    end_time = time.time()
-                    time_taken = end_time - start_time
-                    return match.group(1), time_taken
-                else:
-                    raise Exception("Failed to find content key")
-    except Exception as e:
-        raise Exception(f"Failed to bypass link. Error: {e}")
-
 async def fetch(session, url, referer):
     headers["Referer"] = referer
     async with session.get(url, headers=headers) as response:
@@ -243,7 +188,7 @@ async def process_link():
                         }
 
 @app.route('/api/bypass', methods=['POST'])
-async def bypass():
+def bypass():
     try:
         json_data = request.get_json()
         url = json_data.get('url')
@@ -253,7 +198,7 @@ async def bypass():
 
         # Determine which bypass method to use based on the URL
         if "flux.li" in url or "linkvertise.com" in url:
-            result = await process_link()  # Use the asynchronous bypass function
+            result = asyncio.run(process_link())  # Use the asynchronous bypass function
         elif "platoboost" in url:
             result = delta(url)  # Use the delta method
         else:

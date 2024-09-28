@@ -4,32 +4,18 @@ import base64
 import re
 from urllib.parse import urlparse, parse_qs
 from flask import Flask, request, jsonify
-import asyncio
-from aiohttp import ClientSession
 
 app = Flask(__name__)
 
 # Delta configuration
 platoboost = "https://gateway.platoboost.com/a/8?id="
-discord_webhook_url = "https://discord.com/api/webhooks/1286007233653641246/vjUsAvEcuyxAzJyGh3VZU2txZfa9FO5H1Ohdb1i2WHYlrrrFv-JMfdbveH8xVsBTiAPI"
+discord_webhook_url = "https://discord.com/api/webhooks/1286007233653641246/vjUsAvEcuyxAzJyGh3VZU2txZfa9FO5H1Ohdb1i2WHYlrrrFv-JMfdbveH8xVsBTiAPI"  # enter your webhook if security check detected
 
-# Common headers
-headers = {
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.5',
-    'DNT': '1',
-    'Connection': 'close',
-    'Referer': 'https://linkvertise.com',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x66) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
-}
-
-# Time conversion function
 def time_convert(n):
     hours = n // 60
     minutes = n % 60
     return f"{hours} Hours {minutes} Minutes"
 
-# Discord webhook
 def send_discord_webhook(link):
     payload = {
         "embeds": [{
@@ -44,16 +30,13 @@ def send_discord_webhook(link):
     except requests.exceptions.RequestException as error:
         print(f"ERROR: {error}")
 
-# Sleep utility
 def sleep(ms):
     time.sleep(ms / 1000)
 
-# Turnstile response simulation
 def get_turnstile_response():
     time.sleep(1)
     return "turnstile-response"
 
-# Delta bypass
 def delta(url):
     start_time = time.time()
     try:
@@ -129,75 +112,73 @@ def delta(url):
             "time taken": f"{execution_time:.2f} seconds"
         }
 
-# Async HTTP requests for Fluxus bypass
-key_regex_1 = r'let content = "([^"]+)";'  # Original regex
-key_regex_2 = r'class="card-key" id="key" value="([^"]+)"'  # New regex
+# Fluxus configuration
+key_regex = r'let content = \("([^"]+)"\);'
 
-async def fetch(session, url, referer):
-    headers["Referer"] = referer
-    async with session.get(url, headers=headers) as response:
-        content = await response.text()
-        if response.status != 200:
-            return None, response.status, content
-        return content, response.status, None
+def fetch(url, headers):
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        return response.text
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"Failed to fetch URL: {url}. Error: {e}")
 
-async def process_link(hwid):
-    endpoints = [
-        {
-            "url": f"https://flux.li/android/external/start.php?HWID={hwid}",
-            "referer": "https://linkvertise.com"
-        },
-        {
-            "url": "https://flux.li/android/external/check1.php?hash={hash}",
-            "referer": "https://linkvertise.com"
-        },
-        {
-            "url": "https://flux.li/android/external/main.php?hash={hash}",
-            "referer": "https://linkvertise.com"
-        }
-    ]
-    
-    async with ClientSession() as session:
-        for i, endpoint in enumerate(endpoints):
+def bypass_link(url):
+    try:
+        hwid = url.split("HWID=")[-1]
+        if not hwid:
+            raise Exception("Invalid HWID in URL")
+
+        start_time = time.time()
+        endpoints = [
+            {
+                "url": f"https://flux.li/android/external/start.php?HWID={hwid}",
+                "referer": ""
+            },
+            {
+                "url": "https://flux.li/android/external/check1.php?hash={hash}",
+                "referer": "https://linkvertise.com"
+            },
+            {
+                "url": "https://flux.li/android/external/main.php?hash={hash}",
+                "referer": "https://linkvertise.com"
+            }
+        ]
+
+        for endpoint in endpoints:
             url = endpoint["url"]
             referer = endpoint["referer"]
-            content, status, error_content = await fetch(session, url, referer)
-            if error_content:
-                return {
-                    "status": "error",
-                    "message": f"Failed to bypass at step {i} | Status code: {status}",
-                    "content": error_content
-                }
-
-            if i == len(endpoints) - 1:  # End of the bypass
-                match = re.search(key_regex_1, content)
-                if not match:
-                    match = re.search(key_regex_2, content)
-                
+            headers = {
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'DNT': '1',
+                'Connection': 'close',
+                'Referer': referer,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x66) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
+            }
+            response_text = fetch(url, headers)
+            if endpoint == endpoints[-1]:
+                match = re.search(key_regex, response_text)
                 if match:
-                    return {
-                        "status": "success",
-                        "key": match.group(1)
-                    }
+                    end_time = time.time()
+                    time_taken = end_time - start_time
+                    return match.group(1), time_taken
                 else:
-                    return {
-                        "status": "error",
-                        "message": "Bypass not successful! No key found.",
-                        "content": content
-                    }
+                    raise Exception("Failed to find content key")
+    except Exception as e:
+        raise Exception(f"Failed to bypass link. Error: {e}")
 
 @app.route("/")
 def home():
     return jsonify({"message": "Invalid Endpoint"})
 
 @app.route("/api/bypass")
-async def bypass():
+def bypass():
     url = request.args.get("url")
     if url.startswith("https://flux.li/android/external/start.php?HWID="):
-        hwid = url.split("HWID=")[-1]
         try:
-            result = await process_link(hwid)
-            return jsonify(result)
+            content, time_taken = bypass_link(url)
+            return jsonify({"key": content, "time_taken": time_taken, "credit": "FeliciaXxx"})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
     else:

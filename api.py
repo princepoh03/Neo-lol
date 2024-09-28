@@ -1,15 +1,30 @@
+import asyncio
 import time
-import requests
-import base64
 import re
+import requests
 from urllib.parse import urlparse, parse_qs
 from flask import Flask, request, jsonify
+from aiohttp import ClientSession
 
 app = Flask(__name__)
 
 # Delta configuration
 platoboost = "https://gateway.platoboost.com/a/8?id="
-discord_webhook_url = "https://discord.com/api/webhooks/1286007233653641246/vjUsAvEcuyxAzJyGh3VZU2txZfa9FO5H1Ohdb1i2WHYlrrrFv-JMfdbveH8xVsBTiAPI"  # enter your webhook if security check detected
+discord_webhook_url = "https://discord.com/api/webhooks/1286007233653641246/vjUsAvEcuyxAzJyGh3VZU2txZfa9FO5H1Ohdb1i2WHYlrrrFv-JMfdbveH8xVsBTiAPI"
+
+# Regular expression to extract key from the content
+key_regex_1 = r'let content = "([^"]+)";'  # Original regex
+key_regex_2 = r'class="card-key" id="key" value="([^"]+)"'  # New regex for the updated pattern
+
+# Headers for the HTTP requests
+headers = {
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'DNT': '1',
+    'Connection': 'close',
+    'Referer': 'https://linkvertise.com',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x66) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
+}
 
 def time_convert(n):
     hours = n // 60
@@ -113,7 +128,7 @@ def delta(url):
         }
 
 # Fluxus configuration
-key_regex = r'let content = \("([^"]+)"\);'
+key_regex = r'let content = "([^"]+)";'
 
 def fetch(url, headers):
     try:
@@ -168,22 +183,91 @@ def bypass_link(url):
     except Exception as e:
         raise Exception(f"Failed to bypass link. Error: {e}")
 
-@app.route("/")
-def home():
-    return jsonify({"message": "Invalid Endpoint"})
+async def fetch(session, url, referer):
+    headers["Referer"] = referer
+    async with session.get(url, headers=headers) as response:
+        content = await response.text()
+        if response.status != 200:
+            return None, response.status, content
+        return content, response.status, None
 
-@app.route("/api/bypass")
-def bypass():
-    url = request.args.get("url")
-    if url.startswith("https://flux.li/android/external/start.php?HWID="):
-        try:
-            content, time_taken = bypass_link(url)
-            return jsonify({"key": content, "time_taken": time_taken, "credit": "FeliciaXxx"})
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-    else:
-        result = delta(url)
+async def process_link():
+    endpoints = [
+        {
+            "url": "https://getkey.relzscript.xyz/redirect.php?hwid=12627128828282272",
+            "referer": "https://loot-links.com"
+        },
+        {
+            "url": "https://getkey.relzscript.xyz/check1.php",
+            "referer": "https://linkvertise.com"
+        },
+        {
+            "url": "https://getkey.relzscript.xyz/check2.php",
+            "referer": "https://linkvertise.com"
+        },
+        {
+            "url": "https://getkey.relzscript.xyz/check3.php",
+            "referer": "https://linkvertise.com"
+        },
+        {
+            "url": "https://getkey.relzscript.xyz/finished.php",
+            "referer": "https://linkvertise.com"
+        }
+    ]
+    
+    async with ClientSession() as session:
+        for i, endpoint in enumerate(endpoints):
+            url = endpoint["url"]
+            referer = endpoint["referer"]
+            content, status, error_content = await fetch(session, url, referer)
+            if error_content:
+                return {
+                    "status": "error",
+                    "message": f"Failed to bypass at step {i} | Status code: {status}",
+                    "content": error_content
+                }
+
+            if i == len(endpoints) - 1:  # End of the bypass
+                match = re.search(key_regex_1, content)
+                if not match:
+                    match = re.search(key_regex_2, content)
+                    if match:
+                        return {
+                            "status": "success",
+                            "key": match.group(1)
+                        }
+                    else:
+                        return {
+                            "status": "error",
+                            "message": "Failed to find key in the final step."
+                        }
+
+@app.route('/api/bypass', methods=['POST'])
+async def bypass():
+    try:
+        json_data = request.get_json()
+        url = json_data.get('url')
+
+        if not url:
+            return jsonify({"status": "error", "message": "URL is missing."}), 400
+
+        # Determine which bypass method to use based on the URL
+        if "flux.li" in url or "linkvertise.com" in url:
+            result = await process_link()  # Use the asynchronous bypass function
+        elif "platoboost" in url:
+            result = delta(url)  # Use the delta method
+        else:
+            return jsonify({"status": "error", "message": "Unsupported URL."}), 400
+
         return jsonify(result)
 
-if __name__ == "__main__":
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# Error handling if URL or methods are invalid
+@app.errorhandler(404)
+def page_not_found(e):
+    return jsonify({"status": "error", "message": "The resource could not be found."}), 404
+
+if __name__ == '__main__':
     app.run(debug=True)

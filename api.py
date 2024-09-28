@@ -82,7 +82,7 @@ def bypass():
         except Exception as e:
             return jsonify({"error": str(e)}), 500
     else:
-        result = delta(url)  # Ensure the delta function is defined
+        result = delta(url)
         return jsonify(result)
 
 if __name__ == "__main__":

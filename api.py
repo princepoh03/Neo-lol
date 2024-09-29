@@ -5,11 +5,12 @@ import re
 import asyncio
 from urllib.parse import urlparse, parse_qs
 from flask import Flask, request, jsonify
+from aiohttp import ClientSession  # Import ClientSession here
 
 app = Flask(__name__)
 
 # Fluxus configuration
-key_regex = r'let content = \("([^"]+)"\);'
+key_regex = r'let content = "([^"]+)";'
 
 def fetch(url, headers):
     try:
@@ -63,16 +64,6 @@ def bypass_link(url):
                     raise Exception("Failed to find content key")
     except Exception as e:
         raise Exception(f"Failed to bypass link. Error: {e}")
-        
-#Headers for the HTTP requests
-headers = {
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.5',
-    'DNT': '1',  # Do Not Track Request Header
-    'Connection': 'close',
-    'Referer': 'https://linkvertise.com',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x66) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
-}
 
 # Regular expression to extract key from the content
 key_regex = r'Relz[^"\s]*'  # Updated regex to match keys starting with 'relz'
@@ -86,11 +77,10 @@ async def fetch(session, url, referer):
         return content, response.status, None
 
 async def process_link(url):
-    # Define referers for your specific URLs as needed
     referer = "https://linkvertise.com"
     endpoints = [
         {
-            "url": url,  # Use the provided URL
+            "url": url,
             "referer": referer
         },
         {
@@ -123,13 +113,13 @@ async def process_link(url):
                     "content": error_content
                 }
 
-            if i == len(endpoints) - 1:  # End of the bypass
+            if i == len(endpoints) - 1:
                 match = re.search(key_regex, content)
                 
                 if match:
                     return {
                         "status": "success",
-                        "key": match.group(0)  # Chọn nhóm 0 cho toàn bộ khớp
+                        "key": match.group(0)
                     }
                 else:
                     return {
@@ -161,11 +151,11 @@ def relz_endpoint():
     if not url:
         return jsonify({"status": "error", "message": "Missing 'url' parameter."}), 400
 
-    start_time = time.time()  # Start time
+    start_time = time.time()
     result = asyncio.run(process_link(url))
-    end_time = time.time()  # End time
-    execution_time = end_time - start_time  # Calculate execution time
-    result['execution_time'] = execution_time  # Add execution time to the result
+    end_time = time.time()
+    execution_time = end_time - start_time
+    result['execution_time'] = execution_time
 
     return jsonify(result)
 

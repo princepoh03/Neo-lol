@@ -7,10 +7,10 @@ from aiohttp import ClientSession
 
 app = Flask(__name__)
 
-# Regex for extracting the content key
-key_regex = r'let content = "([^"]+)";'
+# Regular expression to extract key from the content
+fluxus_key_regex = r'let content = "([^"]+)"'  # Updated regex for Fluxus
+relz_key_regex = r'Relz[^"\s]*'  # Updated regex for Relz
 
-# Function to fetch URL content
 def fetch(url, headers):
     try:
         response = requests.get(url, headers=headers)
@@ -19,7 +19,6 @@ def fetch(url, headers):
     except requests.exceptions.RequestException as e:
         raise Exception(f"Failed to fetch URL: {url}. Error: {e}")
 
-# Function to bypass the Fluxus link
 def bypass_fluxus(url):
     try:
         hwid = url.split("HWID=")[-1]
@@ -37,9 +36,9 @@ def bypass_fluxus(url):
             'Referer': 'https://linkvertise.com',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x66) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
         }
-        
+
         response_text = fetch(flux_url, headers)
-        match = re.search(key_regex, response_text)
+        match = re.search(fluxus_key_regex, response_text)
         if match:
             end_time = time.time()
             time_taken = end_time - start_time
@@ -49,15 +48,10 @@ def bypass_fluxus(url):
     except Exception as e:
         raise Exception(f"Failed to bypass link. Error: {e}")
 
-# Asynchronous function to fetch the Relz link
-async def fetch_async(session, url):
+async def fetch_relz(session, url, referer):
     headers = {
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'DNT': '1',
-        'Connection': 'close',
-        'Referer': 'https://linkvertise.com',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x66) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
+        "Referer": referer,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
     }
     async with session.get(url, headers=headers) as response:
         content = await response.text()
@@ -65,65 +59,69 @@ async def fetch_async(session, url):
             return None, response.status, content
         return content, response.status, None
 
-# Asynchronous function to process the Relz link
-async def process_link(url):
+async def process_relz(url):
+    referer = "https://linkvertise.com"
+    endpoints = [
+        {"url": url, "referer": referer},
+        {"url": "https://getkey.relzscript.xyz/check1.php", "referer": referer},
+        {"url": "https://getkey.relzscript.xyz/check2.php", "referer": referer},
+        {"url": "https://getkey.relzscript.xyz/check3.php", "referer": referer},
+        {"url": "https://getkey.relzscript.xyz/finished.php", "referer": referer}
+    ]
+    
     async with ClientSession() as session:
-        content, status, error_content = await fetch_async(session, url)
-        if error_content:
-            return {
-                "status": "error",
-                "message": "Failed to fetch content.",
-                "details": error_content
-            }
+        for i, endpoint in enumerate(endpoints):
+            content, status, error_content = await fetch_relz(session, endpoint["url"], endpoint["referer"])
+            if error_content:
+                return {
+                    "status": "error",
+                    "message": f"Failed to bypass at step {i} | Status code: {status}",
+                    "content": error_content
+                }
 
-        match = re.search(key_regex, content)
-        if match:
-            return {
-                "status": "success",
-                "key": match.group(0)
-            }
-        else:
-            return {
-                "status": "error",
-                "message": "Bypass not successful! No key found.",
-                "content": content
-            }
+            if i == len(endpoints) - 1:
+                match = re.search(relz_key_regex, content)
+                if match:
+                    return {
+                        "status": "success",
+                        "key": match.group(0)
+                    }
+                else:
+                    return {
+                        "status": "error",
+                        "message": "Bypass not successful! No key found.",
+                        "content": content
+                    }
 
-# Home route
-@app.route("/")
-def home():
-    return jsonify({"message": "Invalid Endpoint"})
-
-# Fluxus bypass endpoint
-@app.route("/api/fluxus", methods=['GET'])
+@app.route("/api/fluxus")
 def fluxus_bypass():
     url = request.args.get("url")
-    if url and url.startswith("https://flux.li/android/external/start.php?HWID="):
+    if url.startswith("https://flux.li/android/external/start.php?HWID="):
         try:
             content, time_taken = bypass_fluxus(url)
-            return jsonify({
-                "key": content,
-                "time_taken": time_taken,
-                "credit": "FeliciaXxx"
-            })
+            return jsonify({"key": content, "time_taken": time_taken, "credit": "FeliciaXxx"})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
     else:
-        return jsonify({"error": "Invalid URL for Fluxus bypass."}), 400
+        return jsonify({"error": "Invalid Fluxus URL"}), 400
 
-# Relz bypass endpoint
-@app.route('/api/relz', methods=['GET'])
+@app.route("/api/relz")
 def relz_endpoint():
     url = request.args.get('url')
     if not url:
         return jsonify({"status": "error", "message": "Missing 'url' parameter."}), 400
 
     start_time = time.time()
-    result = asyncio.run(process_link(url))
+    result = asyncio.run(process_relz(url))
     end_time = time.time()
-    result['execution_time'] = end_time - start_time
+    execution_time = end_time - start_time
+    result['execution_time'] = execution_time
 
     return jsonify(result)
+
+@app.route("/")
+def home():
+    return jsonify({"message": "Welcome to the Fluxus and Relz Bypass API"})
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -62,12 +62,86 @@ def bypass_link(url):
                     raise Exception("Failed to find content key")
     except Exception as e:
         raise Exception(f"Failed to bypass link. Error: {e}")
+        
+#Headers for the HTTP requests
+headers = {
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'DNT': '1',  # Do Not Track Request Header
+    'Connection': 'close',
+    'Referer': 'https://linkvertise.com',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x66) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
+}
+
+# Regular expression to extract key from the content
+key_regex = r'Relz[^"\s]*'  # Updated regex to match keys starting with 'relz'
+
+async def fetch(session, url, referer):
+    headers["Referer"] = referer
+    async with session.get(url, headers=headers) as response:
+        content = await response.text()
+        if response.status != 200:
+            return None, response.status, content
+        return content, response.status, None
+
+async def process_link(url):
+    # Define referers for your specific URLs as needed
+    referer = "https://linkvertise.com"
+    endpoints = [
+        {
+            "url": url,  # Use the provided URL
+            "referer": referer
+        },
+        {
+            "url": "https://getkey.relzscript.xyz/check1.php",
+            "referer": referer
+        },
+        {
+            "url": "https://getkey.relzscript.xyz/check2.php",
+            "referer": referer
+        },
+        {
+            "url": "https://getkey.relzscript.xyz/check3.php",
+            "referer": referer
+        },
+        {
+            "url": "https://getkey.relzscript.xyz/finished.php",
+            "referer": referer
+        }
+    ]
+    
+    async with ClientSession() as session:
+        for i, endpoint in enumerate(endpoints):
+            url = endpoint["url"]
+            referer = endpoint["referer"]
+            content, status, error_content = await fetch(session, url, referer)
+            if error_content:
+                return {
+                    "status": "error",
+                    "message": f"Failed to bypass at step {i} | Status code: {status}",
+                    "content": error_content
+                }
+
+            if i == len(endpoints) - 1:  # End of the bypass
+                match = re.search(key_regex, content)
+                
+                if match:
+                    return {
+                        "status": "success",
+                        "key": match.group(0)  # Chọn nhóm 0 cho toàn bộ khớp
+                    }
+                else:
+                    return {
+                        "status": "error",
+                        "message": "Bypass not successful! No key found.",
+                        "content": content
+                    }
 
 @app.route("/")
 def home():
     return jsonify({"message": "Invalid Endpoint"})
 
-@app.route("/api/bypass")
+@app.route("/api/fluxus")
 def bypass():
     url = request.args.get("url")
     if url.startswith("https://flux.li/android/external/start.php?HWID="):
@@ -79,6 +153,20 @@ def bypass():
     else:
         result = delta(url)
         return jsonify(result)
+        
+@app.route('/api/relz', methods=['GET'])
+def relz_endpoint():
+    url = request.args.get('url')
+    if not url:
+        return jsonify({"status": "error", "message": "Missing 'url' parameter."}), 400
+
+    start_time = time.time()  # Start time
+    result = asyncio.run(process_link(url))
+    end_time = time.time()  # End time
+    execution_time = end_time - start_time  # Calculate execution time
+    result['execution_time'] = execution_time  # Add execution time to the result
+
+    return jsonify(result)
 
 if __name__ == "__main__":
     app.run(debug=True)

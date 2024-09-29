@@ -162,11 +162,12 @@ def bypass_link(url):
                 if match:
                     end_time = time.time()
                     time_taken = end_time - start_time
+                    time_taken = f"{time_taken:.2f}"  # Format to three decimals
                     return match.group(1), time_taken
                 else:
                     raise Exception("Failed to find content key")
     except Exception as e:
-        raise Exception(f"Failed to bypass link. Error: {e}")
+        raise Exception(f"An error occurred in bypass_link: {e}")
 
 @app.route("/")
 def home():

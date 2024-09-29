@@ -5,7 +5,7 @@ import re
 import asyncio
 from urllib.parse import urlparse, parse_qs
 from flask import Flask, request, jsonify
-from aiohttp import ClientSession  # Import ClientSession here
+from aiohttp import ClientSession
 
 app = Flask(__name__)
 
@@ -65,11 +65,15 @@ def bypass_link(url):
     except Exception as e:
         raise Exception(f"Failed to bypass link. Error: {e}")
 
-# Regular expression to extract key from the content
-key_regex = r'Relz[^"\s]*'  # Updated regex to match keys starting with 'relz'
-
 async def fetch(session, url, referer):
-    headers["Referer"] = referer
+    headers = {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'DNT': '1',
+        'Connection': 'close',
+        'Referer': referer,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x66) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
+    }
     async with session.get(url, headers=headers) as response:
         content = await response.text()
         if response.status != 200:
@@ -115,7 +119,6 @@ async def process_link(url):
 
             if i == len(endpoints) - 1:
                 match = re.search(key_regex, content)
-                
                 if match:
                     return {
                         "status": "success",
@@ -142,8 +145,7 @@ def bypass():
         except Exception as e:
             return jsonify({"error": str(e)}), 500
     else:
-        result = delta(url)
-        return jsonify(result)
+        return jsonify({"error": "Invalid URL for Fluxus bypass."}), 400
         
 @app.route('/api/relz', methods=['GET'])
 def relz_endpoint():

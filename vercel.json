@@ -8,7 +8,11 @@
   ],
   "routes": [
     {
-      "src": "/api/bypass",
+      "src": "/api/relz",
+      "dest": "/api.py"
+    },
+    {
+      "src": "/api/fluxus",
       "dest": "/api.py"
     },
     {

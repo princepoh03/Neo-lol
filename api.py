@@ -42,7 +42,7 @@ def bypass_link(url):
             }
         ]
 
-        for endpoint in endpoints:
+        for i, endpoint in enumerate(endpoints):
             url = endpoint["url"]
             referer = endpoint["referer"]
             headers = {
@@ -54,7 +54,7 @@ def bypass_link(url):
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x66) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
             }
             response_text = fetch(url, headers)
-            if endpoint == endpoints[-1]:
+            if i == len(endpoints) - 1:
                 match = re.search(key_regex, response_text)
                 if match:
                     end_time = time.time()
